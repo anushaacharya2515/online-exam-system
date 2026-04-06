@@ -220,6 +220,7 @@ export default function ExamPage() {
   const [error, setError] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
   const submittedRef = useRef(false);
+  const alertShownRef = useRef(false);
   const currentQuestion = questions[currentIndex];
   const answeredCount = questions.filter((q) => hasAnswer(answers[q.id])).length;
   const reviewCount = questions.filter((q) => reviewMap[q.id]).length;
@@ -251,6 +252,15 @@ export default function ExamPage() {
   useEffect(() => {
     if (remainingMs === 0 && !submittedRef.current && exam) {
       submit(true);
+    }
+  }, [remainingMs, exam]);
+
+  useEffect(() => {
+    if (!exam || alertShownRef.current) return;
+    const fiveMinutesMs = 5 * 60 * 1000;
+    if (remainingMs > 0 && remainingMs <= fiveMinutesMs) {
+      alertShownRef.current = true;
+      alert("Only 5 minutes left. Please review and submit your exam.");
     }
   }, [remainingMs, exam]);
 
@@ -349,6 +359,16 @@ export default function ExamPage() {
             {currentQuestion && (
               <QuestionCard question={currentQuestion} index={currentIndex} total={questions.length}>
 
+                {currentQuestion.imageUrl && (
+                  <div className="media-block">
+                    <img src={currentQuestion.imageUrl} alt="Question visual" />
+                  </div>
+                )}
+                {currentQuestion.audioUrl && (
+                  <div className="media-block">
+                    <audio controls src={currentQuestion.audioUrl} />
+                  </div>
+                )}
                 {currentQuestion.type === "PARAGRAPH_CASE" && <p className="passage">{currentQuestion.passage}</p>}
                 {currentQuestion.type === "ASSERTION_REASON" && (
                   <div className="passage">
@@ -357,7 +377,7 @@ export default function ExamPage() {
                   </div>
                 )}
 
-                {["MCQ", "SINGLE_MCQ", "PARAGRAPH_CASE", "ASSERTION_REASON", "TRUE_FALSE"].includes(currentQuestion.type) && (
+                {["MCQ", "SINGLE_MCQ", "PARAGRAPH_CASE", "ASSERTION_REASON", "TRUE_FALSE", "LOGICAL_REASONING"].includes(currentQuestion.type) && (
                   <div className="option-grid">
                     {(currentQuestion.options || []).map((o, i) => (
                       <label key={i} className="option-card">

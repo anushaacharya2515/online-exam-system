@@ -80,6 +80,8 @@ export default function QuestionBankPage() {
             <li key={q.id} className="study-item">
               <div className="item-text">
                 <b>{idx + 1}. [{q.type}]</b> {q.text}
+                {q.imageUrl && <img src={q.imageUrl} alt="Question visual" className="study-media" />}
+                {q.audioUrl && <audio controls src={q.audioUrl} className="study-media" />}
                 {q.passage && <p className="muted">Passage: {q.passage}</p>}
                 {q.assertion && <p className="muted">Assertion: {q.assertion}</p>}
                 {q.reason && <p className="muted">Reason: {q.reason}</p>}

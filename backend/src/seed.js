@@ -1,15 +1,14 @@
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
-import { db } from "./db.js";
+import { User } from "./models/User.js";
+import { Question } from "./models/Question.js";
 
 export async function ensureAdmin() {
-  const data = db.read();
-  const existingAdmin = data.users.find((u) => u.role === "admin");
-
+  const existingAdmin = await User.findOne({ role: "admin" }).lean();
   if (existingAdmin) return;
 
   const passwordHash = await bcrypt.hash("admin123", 10);
-  data.users.push({
+  await User.create({
     id: uuidv4(),
     name: "System Admin",
     email: "admin@exam.com",
@@ -17,13 +16,9 @@ export async function ensureAdmin() {
     role: "admin",
     createdAt: new Date().toISOString()
   });
-
-  db.write(data);
 }
 
-export function ensureReferenceQuestionBank() {
-  const data = db.read();
-
+export async function ensureReferenceQuestionBank() {
   const samples = [
     {
       type: "SINGLE_MCQ",
@@ -439,7 +434,8 @@ export function ensureReferenceQuestionBank() {
     }
   ];
 
-  const existingKey = new Set(data.questions.map((q) => `${q.type}::${(q.text || "").trim().toLowerCase()}`));
+  const existing = await Question.find({}, { type: 1, text: 1 }).lean();
+  const existingKey = new Set(existing.map((q) => `${q.type}::${(q.text || "").trim().toLowerCase()}`));
   const prepared = samples
     .filter((q) => !existingKey.has(`${q.type}::${q.text.trim().toLowerCase()}`))
     .map((q) => ({
@@ -452,6 +448,5 @@ export function ensureReferenceQuestionBank() {
     }));
 
   if (prepared.length === 0) return;
-  data.questions.push(...prepared);
-  db.write(data);
+  await Question.insertMany(prepared);
 }

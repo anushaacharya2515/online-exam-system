@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import AdminShell from "../components/AdminShell";
 import QuestionTable from "../components/QuestionTable";
 import { apiClient, withAuth } from "../apiClient";
@@ -8,25 +8,28 @@ import {
   TYPE_OPTIONS,
   TYPE_HELP,
   MODULES,
-  MODULE_OPTIONS,
   parsePairs,
   pairsToText,
   buildDragDropPairs
 } from "./questionBankData";
 
-export default function QuestionBank() {
+export default function ModuleQuestionBank() {
+  const { moduleName } = useParams();
+  const decodedModule = decodeURIComponent(moduleName || "");
+  const moduleTopics = MODULES[decodedModule] || [];
   const { session } = useAuth();
   const token = session.token;
+
   const [questions, setQuestions] = useState([]);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState({ difficulty: "", type: "" });
-  const [modalMode, setModalMode] = useState(null); // add | edit | preview
+  const [filters, setFilters] = useState({ topic: "", difficulty: "", type: "" });
+  const [modalMode, setModalMode] = useState(null);
   const [activeQuestion, setActiveQuestion] = useState(null);
   const [form, setForm] = useState({
     text: "",
-    module: MODULE_OPTIONS[0],
-    topic: MODULES[MODULE_OPTIONS[0]][0],
+    module: decodedModule,
+    topic: moduleTopics[0] || "",
     difficulty: "Easy",
     type: "MCQ",
     options: ["", "", "", ""],
@@ -54,26 +57,36 @@ export default function QuestionBank() {
     load();
   }, []);
 
+  useEffect(() => {
+    setForm((prev) => ({
+      ...prev,
+      module: decodedModule,
+      topic: moduleTopics[0] || ""
+    }));
+  }, [decodedModule]);
+
   const filteredQuestions = useMemo(() => {
     return questions.filter((q) => {
+      const matchesModule = q.subject === decodedModule;
       const matchesSearch = search
         ? `${q.text || q.question_text || ""} ${q.subject || ""} ${q.topic || ""}`
             .toLowerCase()
             .includes(search.toLowerCase())
         : true;
+      const matchesTopic = filters.topic ? q.topic === filters.topic : true;
       const matchesDifficulty = filters.difficulty ? q.difficulty === filters.difficulty : true;
       const matchesType = filters.type ? q.type === filters.type : true;
-      return matchesSearch && matchesDifficulty && matchesType;
+      return matchesModule && matchesSearch && matchesTopic && matchesDifficulty && matchesType;
     });
-  }, [questions, search, filters]);
-
+  }, [questions, search, filters, decodedModule]);
 
   function openAddModal() {
     setActiveQuestion(null);
+    const defaultTopic = filters.topic || moduleTopics[0] || "";
     setForm({
       text: "",
-      module: MODULE_OPTIONS[0],
-      topic: MODULES[MODULE_OPTIONS[0]][0],
+      module: decodedModule,
+      topic: defaultTopic,
       difficulty: "Easy",
       type: "MCQ",
       options: ["", "", "", ""],
@@ -93,8 +106,8 @@ export default function QuestionBank() {
     setActiveQuestion(question);
     setForm({
       text: question.text || question.question_text || "",
-      module: question.subject || MODULE_OPTIONS[0],
-      topic: question.topic || MODULES[MODULE_OPTIONS[0]][0],
+      module: decodedModule,
+      topic: question.topic || moduleTopics[0] || "",
       difficulty: question.difficulty || "Easy",
       type: question.type || "MCQ",
       options: Array.isArray(question.options) && question.options.length ? question.options : ["", "", "", ""],
@@ -134,7 +147,6 @@ export default function QuestionBank() {
 
   function validate() {
     if (!form.text.trim()) return "Question text is required";
-    if (!form.module) return "Module is required";
     if (!form.topic) return "Topic is required";
     if (!form.marks || Number.isNaN(Number(form.marks))) return "Marks must be numeric";
 
@@ -188,7 +200,7 @@ export default function QuestionBank() {
     const options = form.options.map((o) => o.trim()).filter(Boolean);
     let payload = {
       text: form.text,
-      subject: form.module,
+      subject: decodedModule,
       topic: form.topic,
       difficulty: form.difficulty,
       type: form.type,
@@ -273,56 +285,57 @@ export default function QuestionBank() {
     }
   }
 
-  async function applyFilters() {
-    try {
-      const params = new URLSearchParams();
-      if (filters.difficulty) params.append("difficulty", filters.difficulty);
-      if (filters.type) params.append("type", filters.type);
-      const res = await apiClient.get(`/questions/filter?${params.toString()}`, withAuth(token));
-      setQuestions(res.data || []);
-    } catch (err) {
-      setError(err.response?.data?.message || err.message);
-    }
-  }
-
-  async function resetFilters() {
-    setFilters({ difficulty: "", type: "" });
-    setSearch("");
-    load();
+  if (!MODULES[decodedModule]) {
+    return (
+      <AdminShell title="Question Bank">
+        <div className="error">Module not found.</div>
+        <Link to="/admin/question-bank" className="ghost button-link">Back to Question Bank</Link>
+      </AdminShell>
+    );
   }
 
   return (
-    <AdminShell title="Question Bank">
+    <AdminShell title={`${decodedModule} Module`}>
       {error && <div className="error">{error}</div>}
 
-      <div className="qb-controls card">
-        <div className="qb-top-row">
-          <div className="search-row">
-            <input
-              placeholder="Search questions..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <button className="ghost" onClick={handleSearch}>Search</button>
+      <div className="module-header">
+        <div>
+          <div className="breadcrumb">
+            <Link to="/admin/question-bank">Question Bank</Link>
+            <span className="breadcrumb-sep">›</span>
+            <span>{decodedModule}</span>
           </div>
-          <div className="row-actions">
-            <button onClick={openAddModal}>Add Question</button>
-          </div>
+          <h2>{decodedModule}</h2>
+          <p className="muted">Pick a topic and add questions for this module.</p>
         </div>
-
-        <div className="module-card-row">
-          {MODULE_OPTIONS.map((m) => (
-            <Link
-              key={m}
-              className="module-card"
-              to={`/admin/question-bank/module/${encodeURIComponent(m)}`}
-            >
-              <span>{m}</span>
-            </Link>
-          ))}
+        <div className="row-actions">
+          <Link to="/admin/question-bank" className="ghost button-link">Back</Link>
+          <button onClick={openAddModal}>Add Question</button>
         </div>
-        <p className="muted">Select a module to manage its topics and add questions.</p>
+      </div>
 
+      <div className="module-topics">
+        {moduleTopics.map((t) => (
+          <button
+            key={t}
+            type="button"
+            className={`topic-chip ${filters.topic === t ? "active" : ""}`}
+            onClick={() => setFilters({ ...filters, topic: filters.topic === t ? "" : t })}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      <div className="module-filters-card">
+        <div className="search-row">
+          <input
+            placeholder="Search questions..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <button className="ghost" onClick={handleSearch}>Search</button>
+        </div>
         <div className="filter-controls">
           <select value={filters.difficulty} onChange={(e) => setFilters({ ...filters, difficulty: e.target.value })}>
             <option value="">All Difficulty</option>
@@ -333,8 +346,7 @@ export default function QuestionBank() {
             <option value="">All Types</option>
             {TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
-          <button className="ghost" onClick={applyFilters}>Apply Filters</button>
-          <button className="ghost" onClick={resetFilters}>Reset</button>
+          <button className="ghost" onClick={() => setFilters({ topic: "", difficulty: "", type: "" })}>Reset</button>
         </div>
       </div>
 
@@ -417,23 +429,12 @@ export default function QuestionBank() {
                   />
 
                   <div className="row-actions">
-                    <div className="module-card-row">
-                      {MODULE_OPTIONS.map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          className={`module-card ${form.module === m ? "active" : ""}`}
-                          onClick={() => {
-                            const firstTopic = MODULES[m]?.[0] || "";
-                            setForm({ ...form, module: m, topic: firstTopic });
-                          }}
-                        >
-                          <span>{m}</span>
-                        </button>
-                      ))}
+                    <div className="module-label">
+                      <span className="muted">Module</span>
+                      <strong>{decodedModule}</strong>
                     </div>
                     <div className="topic-chip-row">
-                      {(MODULES[form.module] || []).map((t) => (
+                      {(MODULES[decodedModule] || []).map((t) => (
                         <button
                           key={t}
                           type="button"

@@ -1,9 +1,11 @@
 import express from "express";
 import { v4 as uuidv4 } from "uuid";
-import { db } from "../db.js";
 import { auth } from "../middleware/auth.js";
 import { gradeAttempt } from "../services/grading.js";
-import { buildRetakeQuestionSet } from "../services/retakeQuestions.js";
+import { buildRetakeQuestionSetMongo } from "../services/retakeQuestions.js";
+import { Exam } from "../models/Exam.js";
+import { Question } from "../models/Question.js";
+import { Attempt } from "../models/Attempt.js";
 
 export default function studentRouter(io) {
   const router = express.Router();
@@ -16,40 +18,41 @@ export default function studentRouter(io) {
   }
 
   router.get("/exams", (req, res) => {
-    const data = db.read();
-    const exams = data.exams
-      .filter((e) => e.published)
-      .map((e) => ({
+    Exam.find({ published: true }).lean().then((exams) => {
+      res.json(exams.map((e) => ({
         id: e.id,
         title: e.title,
         durationMinutes: e.durationMinutes,
-        totalQuestions: e.questionIds.length
-      }));
-    res.json(exams);
+        totalQuestions: (e.questionIds || []).length
+      })));
+    });
   });
 
   router.get("/question-bank", (req, res) => {
-    const data = db.read();
-    const publishedExamIds = new Set(data.exams.filter((e) => e.published).flatMap((e) => e.questionIds || []));
-    const source = data.questions.filter((q) => publishedExamIds.size === 0 || publishedExamIds.has(q.id));
-
-    const bank = source.slice(0, 50).map((q) => ({
-      id: q.id,
-      type: q.type,
-      text: q.text,
-      passage: q.passage || "",
-      assertion: q.assertion || "",
-      reason: q.reason || "",
-      options: q.options || [],
-      answer: formatAnswer(q.correctAnswer)
-    }));
-
-    res.json(bank);
+    Promise.all([
+      Exam.find({ published: true }, { questionIds: 1 }).lean(),
+      Question.find().lean()
+    ]).then(([exams, questions]) => {
+      const publishedExamIds = new Set(exams.flatMap((e) => e.questionIds || []));
+      const source = questions.filter((q) => publishedExamIds.size === 0 || publishedExamIds.has(q.id));
+      const bank = source.slice(0, 50).map((q) => ({
+        id: q.id,
+        type: q.type,
+        text: q.text,
+        passage: q.passage || "",
+        imageUrl: q.imageUrl || "",
+        audioUrl: q.audioUrl || "",
+        assertion: q.assertion || "",
+        reason: q.reason || "",
+        options: q.options || [],
+        answer: formatAnswer(q.correctAnswer)
+      }));
+      res.json(bank);
+    });
   });
 
-  router.post("/exams/:examId/start", (req, res) => {
-    const data = db.read();
-    const exam = data.exams.find((e) => e.id === req.params.examId && e.published);
+  router.post("/exams/:examId/start", async (req, res) => {
+    const exam = await Exam.findOne({ id: req.params.examId, published: true }).lean();
     if (!exam) return res.status(404).json({ message: "Exam not found" });
     const now = Date.now();
     if (exam.startDate && now < new Date(exam.startDate).getTime()) {
@@ -59,8 +62,7 @@ export default function studentRouter(io) {
       return res.status(403).json({ message: "Exam has ended" });
     }
 
-    const retakePlan = buildRetakeQuestionSet(data, exam, req.user.userId);
-
+    const retakePlan = await buildRetakeQuestionSetMongo(exam, req.user.userId);
     const endAt = now + exam.durationMinutes * 60 * 1000;
 
     const attempt = {
@@ -78,24 +80,22 @@ export default function studentRouter(io) {
       isRetake: retakePlan.isRetake || false
     };
 
-    data.attempts.push(attempt);
-    db.write(data);
-
+    await Attempt.create(attempt);
     res.status(201).json(attempt);
   });
 
-  router.get("/attempts/:attemptId", (req, res) => {
-    const data = db.read();
-    const attempt = data.attempts.find((a) => a.id === req.params.attemptId && a.studentId === req.user.userId);
+  router.get("/attempts/:attemptId", async (req, res) => {
+    const attempt = await Attempt.findOne({ id: req.params.attemptId, studentId: req.user.userId }).lean();
     if (!attempt) return res.status(404).json({ message: "Attempt not found" });
 
-    const exam = data.exams.find((e) => e.id === attempt.examId);
+    const exam = await Exam.findOne({ id: attempt.examId }).lean();
     const questionIds = Array.isArray(attempt.questionIds) && attempt.questionIds.length > 0
       ? attempt.questionIds
       : exam.questionIds;
 
-    const byId = Object.fromEntries(data.questions.map((q) => [q.id, q]));
-    const questions = questionIds
+    const questions = await Question.find({ id: { $in: questionIds } }).lean();
+    const byId = Object.fromEntries(questions.map((q) => [q.id, q]));
+    const ordered = questionIds
       .map((id) => byId[id])
       .filter(Boolean)
       .map((q) => ({
@@ -104,6 +104,8 @@ export default function studentRouter(io) {
         text: q.text,
         options: q.options,
         passage: q.passage,
+        imageUrl: q.imageUrl,
+        audioUrl: q.audioUrl,
         pairs: q.pairs,
         matrixRows: q.matrixRows,
         matrixCols: q.matrixCols,
@@ -114,39 +116,38 @@ export default function studentRouter(io) {
       }));
 
     const remainingMs = Math.max(0, new Date(attempt.endAt).getTime() - Date.now());
-    res.json({ attempt, exam, questions, remainingMs });
+    res.json({ attempt, exam, questions: ordered, remainingMs });
   });
 
-  router.patch("/attempts/:attemptId/answers", (req, res) => {
+  router.patch("/attempts/:attemptId/answers", async (req, res) => {
     const { answers } = req.body;
-    const data = db.read();
-    const idx = data.attempts.findIndex((a) => a.id === req.params.attemptId && a.studentId === req.user.userId);
-    if (idx < 0) return res.status(404).json({ message: "Attempt not found" });
+    const attempt = await Attempt.findOne({ id: req.params.attemptId, studentId: req.user.userId }).lean();
+    if (!attempt) return res.status(404).json({ message: "Attempt not found" });
 
-    if (data.attempts[idx].status !== "in_progress") {
+    if (attempt.status !== "in_progress") {
       return res.status(400).json({ message: "Attempt already submitted" });
     }
 
-    data.attempts[idx].answers = { ...data.attempts[idx].answers, ...(answers || {}) };
-    db.write(data);
+    await Attempt.updateOne(
+      { id: req.params.attemptId },
+      { $set: { answers: { ...attempt.answers, ...(answers || {}) } } }
+    );
     res.json({ message: "Saved" });
   });
 
-  router.post("/attempts/:attemptId/submit", (req, res) => {
-    const data = db.read();
-    const idx = data.attempts.findIndex((a) => a.id === req.params.attemptId && a.studentId === req.user.userId);
-    if (idx < 0) return res.status(404).json({ message: "Attempt not found" });
+  router.post("/attempts/:attemptId/submit", async (req, res) => {
+    const attempt = await Attempt.findOne({ id: req.params.attemptId, studentId: req.user.userId }).lean();
+    if (!attempt) return res.status(404).json({ message: "Attempt not found" });
 
-    const attempt = data.attempts[idx];
     if (attempt.status === "submitted") {
       return res.json(attempt);
     }
 
-    const exam = data.exams.find((e) => e.id === attempt.examId);
+    const exam = await Exam.findOne({ id: attempt.examId }).lean();
     const questionIds = Array.isArray(attempt.questionIds) && attempt.questionIds.length > 0
       ? attempt.questionIds
       : exam.questionIds;
-    const examQuestions = data.questions.filter((q) => questionIds.includes(q.id));
+    const examQuestions = await Question.find({ id: { $in: questionIds } }).lean();
     const graded = gradeAttempt(examQuestions, attempt.answers || {});
 
     const submitted = {
@@ -157,8 +158,7 @@ export default function studentRouter(io) {
       details: graded.details
     };
 
-    data.attempts[idx] = submitted;
-    db.write(data);
+    await Attempt.updateOne({ id: attempt.id }, submitted);
 
     io.emit("result:submitted", {
       examId: submitted.examId,
@@ -171,9 +171,8 @@ export default function studentRouter(io) {
     res.json(submitted);
   });
 
-  router.get("/results", (req, res) => {
-    const data = db.read();
-    const mine = data.attempts.filter((a) => a.studentId === req.user.userId && a.status === "submitted");
+  router.get("/results", async (req, res) => {
+    const mine = await Attempt.find({ studentId: req.user.userId, status: "submitted" }).lean();
     res.json(mine);
   });
 

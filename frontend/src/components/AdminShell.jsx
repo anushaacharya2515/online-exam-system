@@ -7,16 +7,6 @@ export default function AdminShell({ title, children }) {
   return (
     <div className="admin-shell">
       <main className="admin-shell-main admin-page">
-        <div className="admin-shell-top">
-          <div>
-            <p className="eyebrow">Control Center</p>
-            <h2>{title}</h2>
-          </div>
-          <div className="header-actions">
-            <div className="user-pill">{session.user.name || session.user.email}</div>
-          </div>
-        </div>
-
         <aside className="admin-left-nav">
           <div className="nav-title">
             <div className="nav-badge">OE</div>
@@ -46,6 +36,15 @@ export default function AdminShell({ title, children }) {
         </aside>
 
         <div className="admin-content">
+          <div className="admin-shell-top">
+            <div>
+              <p className="eyebrow">Control Center</p>
+              <h2>{title}</h2>
+            </div>
+            <div className="header-actions">
+              <div className="user-pill">{session.user.name || session.user.email}</div>
+            </div>
+          </div>
           {children}
         </div>
       </main>

@@ -3,6 +3,7 @@ import { useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import QuestionBank from "./pages/QuestionBank";
+import ModuleQuestionBank from "./pages/ModuleQuestionBank";
 import AddQuestion from "./pages/AddQuestion";
 import EditQuestion from "./pages/EditQuestion";
 import AdminCreateExam from "./pages/AdminCreateExam";
@@ -41,6 +42,14 @@ export default function App() {
         element={
           <ProtectedRoute role="admin">
             <QuestionBank />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/question-bank/module/:moduleName"
+        element={
+          <ProtectedRoute role="admin">
+            <ModuleQuestionBank />
           </ProtectedRoute>
         }
       />

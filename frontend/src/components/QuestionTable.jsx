@@ -6,7 +6,7 @@ export default function QuestionTable({ questions, onEdit, onDelete, onPreview }
           <tr>
             <th>ID</th>
             <th>Question Text</th>
-            <th>Subject</th>
+            <th>Module</th>
             <th>Topic</th>
             <th>Difficulty</th>
             <th>Question Type</th>

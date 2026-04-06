@@ -9,6 +9,7 @@ const TYPE_OPTIONS = [
   { label: "Multiple Select", value: "MSQ" },
   { label: "Fill in the Blank", value: "FILL_BLANK" },
   { label: "Integer Type", value: "INTEGER" },
+  { label: "Logical Reasoning", value: "LOGICAL_REASONING" },
   { label: "Matching", value: "MATCH" },
   { label: "Drag and Drop", value: "DRAG_DROP" },
   { label: "True / False", value: "TRUE_FALSE" }
@@ -47,6 +48,9 @@ export default function EditQuestion() {
     msqCorrect: [],
     pairText: "",
     dragOrderText: "",
+    imageUrl: "",
+    audioUrl: "",
+    explanation: "",
     marks: 1
   });
 
@@ -71,6 +75,9 @@ export default function EditQuestion() {
         msqCorrect: Array.isArray(q.correctAnswer) ? q.correctAnswer : [],
         pairText: pairsToText(q.pairs),
         dragOrderText: Array.isArray(q.pairs) ? q.pairs.map((p) => p.right).join("\n") : "",
+        imageUrl: q.imageUrl || "",
+        audioUrl: q.audioUrl || "",
+        explanation: q.explanation || "",
         marks: q.marks || 1
       });
     } catch (err) {
@@ -99,7 +106,7 @@ export default function EditQuestion() {
     if (!form.subject.trim()) return "Subject is required";
     if (!form.topic.trim()) return "Topic is required";
 
-    if (form.type === "MCQ") {
+    if (form.type === "MCQ" || form.type === "LOGICAL_REASONING") {
       const options = form.options.map((o) => o.trim()).filter(Boolean);
       if (options.length < 2) return "At least 2 options are required for MCQ";
       if (!form.correctAnswer) return "Correct answer is required";
@@ -149,10 +156,13 @@ export default function EditQuestion() {
       difficulty: form.difficulty,
       type: form.type,
       marks: Number(form.marks || 1),
-      options
+      options,
+      imageUrl: form.imageUrl,
+      audioUrl: form.audioUrl,
+      explanation: form.explanation
     };
 
-    if (form.type === "MCQ") {
+    if (form.type === "MCQ" || form.type === "LOGICAL_REASONING") {
       payload = { ...payload, correctAnswer: form.correctAnswer };
     }
 
@@ -204,6 +214,12 @@ export default function EditQuestion() {
       <form className="card admin-form" onSubmit={handleSubmit}>
         <label>Question Text</label>
         <textarea value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} />
+        <label>Image URL (optional)</label>
+        <input type="text" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} />
+        <label>Audio URL (optional)</label>
+        <input type="text" value={form.audioUrl} onChange={(e) => setForm({ ...form, audioUrl: e.target.value })} />
+        <label>Explanation (optional)</label>
+        <textarea value={form.explanation} onChange={(e) => setForm({ ...form, explanation: e.target.value })} />
 
         <div className="row-actions">
           <div>
@@ -235,7 +251,7 @@ export default function EditQuestion() {
           </div>
         </div>
 
-        {(form.type === "MCQ" || form.type === "MSQ") && (
+        {(form.type === "MCQ" || form.type === "MSQ" || form.type === "LOGICAL_REASONING") && (
           <>
             <label>Options</label>
             {form.options.map((o, idx) => (
@@ -250,7 +266,7 @@ export default function EditQuestion() {
           </>
         )}
 
-        {form.type === "MCQ" && (
+        {(form.type === "MCQ" || form.type === "LOGICAL_REASONING") && (
           <>
             <label>Correct Answer</label>
             <select value={form.correctAnswer} onChange={(e) => setForm({ ...form, correctAnswer: e.target.value })}>

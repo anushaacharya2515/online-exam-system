@@ -1,28 +1,28 @@
 import express from "express";
 import { v4 as uuidv4 } from "uuid";
-import { db } from "../db.js";
 import { auth } from "../middleware/auth.js";
 import { buildQuestion } from "../services/questionBank.js";
+import { Question } from "../models/Question.js";
+import { Exam } from "../models/Exam.js";
+import { Attempt } from "../models/Attempt.js";
+import { User } from "../models/User.js";
 
 const router = express.Router();
 
 router.use(auth("admin"));
 
 router.get("/questions", (req, res) => {
-  const data = db.read();
-  res.json(data.questions);
+  Question.find().lean().then((questions) => res.json(questions));
 });
 
 router.post("/questions", (req, res) => {
-  const data = db.read();
   const question = buildQuestion(req.body);
   if (question.error) {
     return res.status(400).json({ message: question.error });
   }
-  data.questions.push(question);
-  db.write(data);
-
-  res.status(201).json(question);
+  Question.create(question).then((created) => {
+    res.status(201).json(created);
+  });
 });
 
 router.post("/questions/bulk", (req, res) => {
@@ -31,7 +31,6 @@ router.post("/questions/bulk", (req, res) => {
     return res.status(400).json({ message: "questions array required" });
   }
 
-  const data = db.read();
   const created = [];
 
   for (const item of questions) {
@@ -42,46 +41,36 @@ router.post("/questions/bulk", (req, res) => {
     created.push(q);
   }
 
-  data.questions.push(...created);
-  db.write(data);
-  res.status(201).json({ count: created.length });
+  Question.insertMany(created).then(() => res.status(201).json({ count: created.length }));
 });
 
 
 router.put("/questions/:id", (req, res) => {
-  const data = db.read();
-  const idx = data.questions.findIndex((q) => q.id === req.params.id);
-  if (idx < 0) return res.status(404).json({ message: "Question not found" });
-
-  data.questions[idx] = { ...data.questions[idx], ...req.body, updatedAt: new Date().toISOString() };
-  db.write(data);
-  res.json(data.questions[idx]);
+  Question.findOneAndUpdate(
+    { id: req.params.id },
+    { ...req.body, updatedAt: new Date().toISOString() },
+    { new: true }
+  ).then((updated) => {
+    if (!updated) return res.status(404).json({ message: "Question not found" });
+    res.json(updated);
+  });
 });
 
 router.delete("/questions/:id", (req, res) => {
-  const data = db.read();
-  const before = data.questions.length;
-  data.questions = data.questions.filter((q) => q.id !== req.params.id);
-
-  if (before === data.questions.length) {
-    return res.status(404).json({ message: "Question not found" });
-  }
-
-  data.exams = data.exams.map((ex) => ({
-    ...ex,
-    questionIds: ex.questionIds.filter((id) => id !== req.params.id)
-  }));
-
-  db.write(data);
-  res.json({ message: "Deleted" });
+  Question.deleteOne({ id: req.params.id }).then(async (result) => {
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+    await Exam.updateMany({}, { $pull: { questionIds: req.params.id } });
+    res.json({ message: "Deleted" });
+  });
 });
 
 router.get("/exams", (req, res) => {
-  const data = db.read();
-  res.json(data.exams);
+  Exam.find().lean().then((exams) => res.json(exams));
 });
 
-router.post("/exams", (req, res) => {
+router.post("/exams", async (req, res) => {
   const {
     title,
     durationMinutes,
@@ -94,7 +83,6 @@ router.post("/exams", (req, res) => {
     return res.status(400).json({ message: "title and durationMinutes are required" });
   }
 
-  const data = db.read();
   let pickedIds = Array.isArray(questionIds) ? questionIds : [];
 
   if (selectionRules) {
@@ -107,11 +95,11 @@ router.post("/exams", (req, res) => {
     const picked = [];
     for (const [level, countRaw] of difficulties) {
       const count = Number(countRaw);
-      const pool = data.questions.filter((q) => {
-        if (subject && q.subject !== subject) return false;
-        if (topic && q.topic !== topic) return false;
-        return q.difficulty === level;
-      });
+      const pool = await Question.find({
+        ...(subject ? { subject } : {}),
+        ...(topic ? { topic } : {}),
+        difficulty: level
+      }).lean();
 
       if (pool.length < count) {
         return res.status(400).json({ message: `Not enough ${level} questions for the selected rules` });
@@ -135,13 +123,12 @@ router.post("/exams", (req, res) => {
       return res.status(400).json({ message: "selection.count must be > 0" });
     }
 
-    const candidates = data.questions.filter((q) => {
-      if (subject && q.subject !== subject) return false;
-      if (difficulty && q.difficulty !== difficulty) return false;
-      if (topic && q.topic !== topic) return false;
-      if (marks && Number(q.marks) !== Number(marks)) return false;
-      return true;
-    });
+    const candidates = await Question.find({
+      ...(subject ? { subject } : {}),
+      ...(difficulty ? { difficulty } : {}),
+      ...(topic ? { topic } : {}),
+      ...(marks ? { marks: Number(marks) } : {})
+    }).lean();
 
     if (candidates.length < Number(count)) {
       return res.status(400).json({ message: "Not enough questions for the selected criteria" });
@@ -166,44 +153,97 @@ router.post("/exams", (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  data.exams.push(exam);
-  db.write(data);
-  res.status(201).json(exam);
+  Exam.create(exam).then((created) => res.status(201).json(created));
 });
 
 router.put("/exams/:id", (req, res) => {
-  const data = db.read();
-  const idx = data.exams.findIndex((e) => e.id === req.params.id);
-  if (idx < 0) return res.status(404).json({ message: "Exam not found" });
-
-  data.exams[idx] = { ...data.exams[idx], ...req.body, updatedAt: new Date().toISOString() };
-  db.write(data);
-  res.json(data.exams[idx]);
+  Exam.findOneAndUpdate(
+    { id: req.params.id },
+    { ...req.body, updatedAt: new Date().toISOString() },
+    { new: true }
+  ).then((updated) => {
+    if (!updated) return res.status(404).json({ message: "Exam not found" });
+    res.json(updated);
+  });
 });
 
 router.get("/results", (req, res) => {
-  const data = db.read();
   const { examId } = req.query;
-  const attempts = examId ? data.attempts.filter((a) => a.examId === examId) : data.attempts;
-  res.json(attempts);
+  Promise.all([
+    Attempt.find(examId ? { examId } : {}).lean(),
+    User.find().lean(),
+    Exam.find().lean()
+  ]).then(([attempts, users, exams]) => {
+    const enriched = attempts.map((a) => {
+      const user = users.find((u) => u.id === a.studentId);
+      const exam = exams.find((e) => e.id === a.examId);
+      const start = a.startedAt ? new Date(a.startedAt).getTime() : null;
+      const end = a.submittedAt ? new Date(a.submittedAt).getTime()
+        : a.endAt ? new Date(a.endAt).getTime()
+        : null;
+      const timeTakenMs = start && end ? Math.max(0, end - start) : null;
+      return {
+        ...a,
+        studentName: user?.name || user?.email || "Unknown",
+        studentEmail: user?.email || "",
+        examTitle: exam?.title || exam?.examName || a.examId,
+        timeTakenMs
+      };
+    });
+    res.json(enriched);
+  });
 });
 
 router.get("/reports/:examId", (req, res) => {
-  const data = db.read();
-  const exam = data.exams.find((e) => e.id === req.params.examId);
-  if (!exam) return res.status(404).json({ message: "Exam not found" });
+  Promise.all([
+    Exam.findOne({ id: req.params.examId }).lean(),
+    Attempt.find({ examId: req.params.examId, status: "submitted" }).lean(),
+    User.find().lean()
+  ]).then(([exam, attempts, users]) => {
+    if (!exam) return res.status(404).json({ message: "Exam not found" });
 
-  const attempts = data.attempts.filter((a) => a.examId === exam.id && a.status === "submitted");
-  const lines = ["studentEmail,score,submittedAt,attemptId"];
+    const lines = ["studentEmail,score,submittedAt,attemptId"];
+    for (const a of attempts) {
+      const user = users.find((u) => u.id === a.studentId);
+      lines.push(`${user?.email || "unknown"},${a.score || 0},${a.submittedAt || ""},${a.id}`);
+    }
 
-  for (const a of attempts) {
-    const user = data.users.find((u) => u.id === a.studentId);
-    lines.push(`${user?.email || "unknown"},${a.score || 0},${a.submittedAt || ""},${a.id}`);
-  }
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename=report-${exam.id}.csv`);
+    res.send(lines.join("\n"));
+  });
+});
 
-  res.setHeader("Content-Type", "text/csv");
-  res.setHeader("Content-Disposition", `attachment; filename=report-${exam.id}.csv`);
-  res.send(lines.join("\n"));
+router.get("/students", (req, res) => {
+  Promise.all([
+    User.find({ role: "student" }).lean(),
+    Attempt.find().lean()
+  ]).then(([students, attempts]) => {
+    const rows = students.map((s) => {
+      const userAttempts = attempts.filter((a) => a.studentId === s.id);
+      const submitted = userAttempts.filter((a) => a.status === "submitted" || a.submittedAt);
+      const uniqueExams = new Set(userAttempts.map((a) => a.examId));
+      const avgScore = submitted.length
+        ? Math.round(submitted.reduce((sum, a) => sum + Number(a.score || 0), 0) / submitted.length)
+        : 0;
+      const lastAttempt = userAttempts
+        .map((a) => a.submittedAt || a.startedAt || "")
+        .filter(Boolean)
+        .sort()
+        .slice(-1)[0] || null;
+
+      return {
+        id: s.id,
+        name: s.name || s.email,
+        email: s.email,
+        examsTaken: uniqueExams.size,
+        averageScore: avgScore,
+        lastAttempt
+      };
+    });
+
+    res.json(rows);
+  });
 });
 
 export default router;

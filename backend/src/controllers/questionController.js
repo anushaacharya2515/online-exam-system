@@ -1,5 +1,6 @@
-import { db } from "../db.js";
 import { buildQuestion } from "../services/questionBank.js";
+import { Question } from "../models/Question.js";
+import { Exam } from "../models/Exam.js";
 
 function splitCsvLine(line) {
   const out = [];
@@ -70,50 +71,40 @@ function toQuestionFromCsv(row) {
 }
 
 export function listQuestions(req, res) {
-  const data = db.read();
-  res.json(data.questions);
+  Question.find().lean().then((questions) => res.json(questions));
 }
 
 export function searchQuestions(req, res) {
   const keyword = (req.query.keyword || "").toString().trim().toLowerCase();
-  const data = db.read();
-  if (!keyword) return res.json(data.questions);
+  if (!keyword) return Question.find().lean().then((questions) => res.json(questions));
 
-  const result = data.questions.filter((q) => {
-    const hay = `${q.text || ""} ${q.subject || ""} ${q.topic || ""}`.toLowerCase();
-    return hay.includes(keyword);
+  Question.find().lean().then((questions) => {
+    const result = questions.filter((q) => {
+      const hay = `${q.text || ""} ${q.subject || ""} ${q.topic || ""}`.toLowerCase();
+      return hay.includes(keyword);
+    });
+    res.json(result);
   });
-  res.json(result);
 }
 
 export function filterQuestions(req, res) {
   const { subject, difficulty, type } = req.query;
-  const data = db.read();
-  const result = data.questions.filter((q) => {
-    if (subject && q.subject !== subject) return false;
-    if (difficulty && q.difficulty !== difficulty) return false;
-    if (type && q.type !== type) return false;
-    return true;
-  });
-  res.json(result);
+  Question.find({
+    ...(subject ? { subject } : {}),
+    ...(difficulty ? { difficulty } : {}),
+    ...(type ? { type } : {})
+  }).lean().then((result) => res.json(result));
 }
 
 export function createQuestion(req, res) {
-  const data = db.read();
   const question = buildQuestion(req.body);
   if (question.error) {
     return res.status(400).json({ message: question.error });
   }
-  data.questions.push(question);
-  db.write(data);
-  res.status(201).json(question);
+  Question.create(question).then((created) => res.status(201).json(created));
 }
 
 export function updateQuestion(req, res) {
-  const data = db.read();
-  const idx = data.questions.findIndex((q) => q.id === req.params.id);
-  if (idx < 0) return res.status(404).json({ message: "Question not found" });
-
   const normalized = {
     ...req.body,
     text: req.body.text ?? req.body.question_text,
@@ -123,27 +114,22 @@ export function updateQuestion(req, res) {
     difficulty: req.body.difficulty ?? req.body.level
   };
 
-  data.questions[idx] = { ...data.questions[idx], ...normalized, updatedAt: new Date().toISOString() };
-  db.write(data);
-  res.json(data.questions[idx]);
+  Question.findOneAndUpdate(
+    { id: req.params.id },
+    { ...normalized, updatedAt: new Date().toISOString() },
+    { new: true }
+  ).then((updated) => {
+    if (!updated) return res.status(404).json({ message: "Question not found" });
+    res.json(updated);
+  });
 }
 
 export function deleteQuestion(req, res) {
-  const data = db.read();
-  const before = data.questions.length;
-  data.questions = data.questions.filter((q) => q.id !== req.params.id);
-
-  if (before === data.questions.length) {
-    return res.status(404).json({ message: "Question not found" });
-  }
-
-  data.exams = data.exams.map((ex) => ({
-    ...ex,
-    questionIds: ex.questionIds.filter((id) => id !== req.params.id)
-  }));
-
-  db.write(data);
-  res.json({ message: "Deleted" });
+  Question.deleteOne({ id: req.params.id }).then(async (result) => {
+    if (result.deletedCount === 0) return res.status(404).json({ message: "Question not found" });
+    await Exam.updateMany({}, { $pull: { questionIds: req.params.id } });
+    res.json({ message: "Deleted" });
+  });
 }
 
 export function uploadCsv(req, res) {
@@ -158,7 +144,6 @@ export function uploadCsv(req, res) {
   }
 
   const headers = splitCsvLine(lines[0]).map((h) => h.trim().toLowerCase());
-  const data = db.read();
   const added = [];
   const errors = [];
 
@@ -173,8 +158,5 @@ export function uploadCsv(req, res) {
     added.push(question);
   }
 
-  data.questions.push(...added);
-  db.write(data);
-
-  res.json({ added: added.length, errors });
+  Question.insertMany(added).then(() => res.json({ added: added.length, errors }));
 }

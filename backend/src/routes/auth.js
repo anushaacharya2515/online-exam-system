@@ -1,7 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
-import { db } from "../db.js";
+import { User } from "../models/User.js";
 import { signToken } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -12,8 +12,7 @@ router.post("/register", async (req, res) => {
     return res.status(400).json({ message: "name, email, password are required" });
   }
 
-  const data = db.read();
-  const exists = data.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+  const exists = await User.findOne({ email: email.toLowerCase() });
   if (exists) {
     return res.status(409).json({ message: "Email already registered" });
   }
@@ -22,14 +21,12 @@ router.post("/register", async (req, res) => {
   const user = {
     id: uuidv4(),
     name,
-    email,
+    email: email.toLowerCase(),
     passwordHash,
     role: "student",
     createdAt: new Date().toISOString()
   };
-
-  data.users.push(user);
-  db.write(data);
+  await User.create(user);
 
   res.status(201).json({ message: "Registered successfully" });
 });
@@ -40,8 +37,7 @@ router.post("/login", async (req, res) => {
     return res.status(400).json({ message: "email and password are required" });
   }
 
-  const data = db.read();
-  const user = data.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+  const user = await User.findOne({ email: email.toLowerCase() }).lean();
 
   if (!user) {
     return res.status(401).json({ message: "Invalid credentials" });

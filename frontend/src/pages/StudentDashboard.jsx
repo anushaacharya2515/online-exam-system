@@ -136,32 +136,6 @@ export default function StudentDashboard() {
         </section>
       </main>
 
-      <aside className="student-dash-right">
-        <div className="testimony-panel">
-          <h4>Testimony</h4>
-          <div className="testimony-item">
-            <div className="avatar">L</div>
-            <div>
-              <b>Leonardo</b>
-              <p>Helped me score higher.</p>
-            </div>
-          </div>
-          <div className="testimony-item">
-            <div className="avatar">C</div>
-            <div>
-              <b>Chillene</b>
-              <p>Clear layout and great prep.</p>
-            </div>
-          </div>
-          <div className="testimony-item">
-            <div className="avatar">S</div>
-            <div>
-              <b>Sukma</b>
-              <p>Nice study bank.</p>
-            </div>
-          </div>
-        </div>
-      </aside>
     </div>
   );
 }

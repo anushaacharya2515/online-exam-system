@@ -92,47 +92,39 @@ export default function StudentResultsPage() {
         <section className="panel">
           <h3>Your Results</h3>
           <p className="muted">Scores for all submitted attempts.</p>
-          <ul className="list">
-            {results.length === 0 && <li className="empty-item">You have no submitted results yet.</li>}
-            {results.map((r) => (
-              <li key={r.id}>
-                <div>
-                  <b>{examById[r.examId]?.title || r.examId}</b>
-                  <div>Score: {r.score}</div>
-                  <small>{r.submittedAt}</small>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Test Name</th>
+                  <th>Score</th>
+                  <th>Submitted Time (IST)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.length === 0 && (
+                  <tr>
+                    <td colSpan="3" className="empty-cell">You have no submitted results yet.</td>
+                  </tr>
+                )}
+                {results.map((r) => {
+                  const submittedAt = r.submittedAt
+                    ? new Date(r.submittedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
+                    : "-";
+                  return (
+                    <tr key={r.id}>
+                      <td>{examById[r.examId]?.title || r.examId}</td>
+                      <td>{r.score}</td>
+                      <td>{submittedAt}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </section>
       </main>
 
-      <aside className="student-dash-right">
-        <div className="testimony-panel">
-          <h4>Testimony</h4>
-          <div className="testimony-item">
-            <div className="avatar">L</div>
-            <div>
-              <b>Leonardo</b>
-              <p>Helped me score higher.</p>
-            </div>
-          </div>
-          <div className="testimony-item">
-            <div className="avatar">C</div>
-            <div>
-              <b>Chillene</b>
-              <p>Clear layout and great prep.</p>
-            </div>
-          </div>
-          <div className="testimony-item">
-            <div className="avatar">S</div>
-            <div>
-              <b>Sukma</b>
-              <p>Nice study bank.</p>
-            </div>
-          </div>
-        </div>
-      </aside>
     </div>
   );
 }

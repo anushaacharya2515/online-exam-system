@@ -21,7 +21,9 @@ const QUESTION_TYPES = [
   { value: "DRAG_DROP", label: "Drag and Drop Type" },
   { value: "MATRIX", label: "Matrix Matching" },
   { value: "PARAGRAPH_CASE", label: "Paragraph / Case Based" },
-  { value: "ASSERTION_REASON", label: "Assertion-Reason" }
+  { value: "ASSERTION_REASON", label: "Assertion-Reason" },
+  { value: "TRUE_FALSE", label: "True / False" },
+  { value: "LOGICAL_REASONING", label: "Logical Reasoning" }
 ];
 
 function defaultDraft() {
@@ -36,6 +38,9 @@ function defaultDraft() {
     difficulty: "Easy",
     topic: "General",
     passage: "",
+    imageUrl: "",
+    audioUrl: "",
+    explanation: "",
     integerMin: "",
     integerMax: "",
     matrixRowsText: "",
@@ -121,10 +126,17 @@ export default function AdminDashboard() {
       difficulty: questionDraft.difficulty,
       topic: questionDraft.topic,
       options: questionDraft.options.map((o) => o.trim()).filter(Boolean),
-      passage: questionDraft.passage
+      passage: questionDraft.passage,
+      imageUrl: questionDraft.imageUrl,
+      audioUrl: questionDraft.audioUrl,
+      explanation: questionDraft.explanation
     };
 
-    if (type === "SINGLE_MCQ" || type === "PARAGRAPH_CASE") {
+    if (type === "TRUE_FALSE") {
+      return { ...base, options: ["True", "False"], correctAnswer: questionDraft.correctAnswer };
+    }
+
+    if (type === "SINGLE_MCQ" || type === "PARAGRAPH_CASE" || type === "LOGICAL_REASONING") {
       return { ...base, correctAnswer: questionDraft.correctAnswer };
     }
 
@@ -262,7 +274,7 @@ export default function AdminDashboard() {
     URL.revokeObjectURL(url);
   }
 
-  const showOptions = ["SINGLE_MCQ", "MSQ", "PARAGRAPH_CASE"].includes(questionDraft.type);
+  const showOptions = ["SINGLE_MCQ", "MSQ", "PARAGRAPH_CASE", "LOGICAL_REASONING"].includes(questionDraft.type);
 
   const selection = examDraft.selection || {};
   const availableCount = questions.filter((q) => {
@@ -306,6 +318,9 @@ export default function AdminDashboard() {
             </select>
 
             <textarea placeholder="Question text" value={questionDraft.text} onChange={(e) => setQuestionDraft({ ...questionDraft, text: e.target.value })} />
+            <input placeholder="Image URL (optional)" value={questionDraft.imageUrl} onChange={(e) => setQuestionDraft({ ...questionDraft, imageUrl: e.target.value })} />
+            <input placeholder="Audio URL (optional)" value={questionDraft.audioUrl} onChange={(e) => setQuestionDraft({ ...questionDraft, audioUrl: e.target.value })} />
+            <textarea placeholder="Explanation (optional)" value={questionDraft.explanation} onChange={(e) => setQuestionDraft({ ...questionDraft, explanation: e.target.value })} />
 
             <select required value={questionDraft.difficulty} onChange={(e) => setQuestionDraft({ ...questionDraft, difficulty: e.target.value })}>
               <option value="Easy">Easy</option>
@@ -336,10 +351,10 @@ export default function AdminDashboard() {
               />
             ))}
 
-            {["SINGLE_MCQ", "PARAGRAPH_CASE"].includes(questionDraft.type) && (
+            {["SINGLE_MCQ", "PARAGRAPH_CASE", "LOGICAL_REASONING", "TRUE_FALSE"].includes(questionDraft.type) && (
               <select value={questionDraft.correctAnswer} onChange={(e) => setQuestionDraft({ ...questionDraft, correctAnswer: e.target.value })}>
                 <option value="">Select correct option</option>
-                {questionDraft.options.filter(Boolean).map((o) => (
+                {(questionDraft.type === "TRUE_FALSE" ? ["True", "False"] : questionDraft.options.filter(Boolean)).map((o) => (
                   <option key={o} value={o}>{o}</option>
                 ))}
               </select>

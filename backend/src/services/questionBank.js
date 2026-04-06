@@ -7,7 +7,10 @@ export function buildQuestion(body) {
     correctAnswer: body.correctAnswer ?? body.correct_answer,
     subject: body.subject ?? body.subject_name,
     topic: body.topic ?? body.topic_name,
-    difficulty: body.difficulty ?? body.level
+    difficulty: body.difficulty ?? body.level,
+    imageUrl: body.imageUrl ?? body.image_url ?? "",
+    audioUrl: body.audioUrl ?? body.audio_url ?? "",
+    explanation: body.explanation ?? ""
   };
 
   const {
@@ -22,6 +25,9 @@ export function buildQuestion(body) {
     integerRange = null,
     assertion = "",
     reason = "",
+    imageUrl = "",
+    audioUrl = "",
+    explanation = "",
     subject = "",
     difficulty = "",
     topic = "",
@@ -36,13 +42,13 @@ export function buildQuestion(body) {
     return { error: "subject, difficulty, topic are required" };
   }
 
-  const optionTypes = ["MCQ", "SINGLE_MCQ", "MSQ", "PARAGRAPH_CASE", "ASSERTION_REASON", "TRUE_FALSE"];
+  const optionTypes = ["MCQ", "SINGLE_MCQ", "MSQ", "PARAGRAPH_CASE", "ASSERTION_REASON", "TRUE_FALSE", "LOGICAL_REASONING"];
   const cleanedOptions = Array.isArray(options) ? options.filter((o) => String(o || "").trim()) : [];
   if (optionTypes.includes(type) && cleanedOptions.length < 2) {
     return { error: "options are required for this question type" };
   }
 
-  if (type === "MCQ" || type === "SINGLE_MCQ" || type === "PARAGRAPH_CASE" || type === "ASSERTION_REASON" || type === "TRUE_FALSE") {
+  if (type === "MCQ" || type === "SINGLE_MCQ" || type === "PARAGRAPH_CASE" || type === "ASSERTION_REASON" || type === "TRUE_FALSE" || type === "LOGICAL_REASONING") {
     if (correctAnswer === undefined || correctAnswer === "") {
       return { error: "correctAnswer is required" };
     }
@@ -65,6 +71,9 @@ export function buildQuestion(body) {
     integerRange,
     assertion,
     reason,
+    imageUrl,
+    audioUrl,
+    explanation,
     subject,
     difficulty,
     topic,

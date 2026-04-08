@@ -5,13 +5,17 @@ import {
   listExams,
   getExam,
   generateExam,
-  submitExam
+  submitExam,
+  autoGenerateExam,
+  manualCreateExam
 } from "../controllers/examController.js";
 
 const router = express.Router();
 
 router.use(auth());
 
+router.post("/auto-generate", autoGenerateExam);
+router.post("/manual", manualCreateExam);
 router.post("/", createExam);
 router.get("/", listExams);
 router.get("/:id", getExam);

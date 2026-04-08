@@ -3,14 +3,17 @@ import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
 import dotenv from "dotenv";
+import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/auth.js";
 import adminRoutes from "./routes/admin.js";
 import questionRoutes from "./routes/questions.js";
 import examRoutes from "./routes/exams.js";
 import studentRouter from "./routes/student.js";
+import moduleRoutes from "./routes/modules.js";
+import topicRoutes from "./routes/topics.js";
+import subTopicRoutes from "./routes/subtopics.js";
 import { ensureAdmin, ensureReferenceQuestionBank } from "./seed.js";
 import { gradeAttempt } from "./services/grading.js";
-import mongoose from "mongoose";
 import { Attempt } from "./models/Attempt.js";
 import { Exam } from "./models/Exam.js";
 import { Question } from "./models/Question.js";
@@ -35,6 +38,9 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/questions", questionRoutes);
 app.use("/api/exams", examRoutes);
 app.use("/api/student", studentRouter(io));
+app.use("/api/modules", moduleRoutes);
+app.use("/api/topics", topicRoutes);
+app.use("/api/subtopics", subTopicRoutes);
 
 function autoSubmitExpiredAttempts() {
   Attempt.find({ status: "in_progress" }).then(async (attempts) => {
@@ -71,9 +77,7 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/online-exam";
-
-mongoose.connect(MONGO_URI).then(async () => {
+connectDB().then(async () => {
   await ensureAdmin();
   await ensureReferenceQuestionBank();
   setInterval(autoSubmitExpiredAttempts, 5000);
@@ -82,4 +86,6 @@ mongoose.connect(MONGO_URI).then(async () => {
     console.log(`Backend running on http://localhost:${PORT}`);
     console.log("Default admin: admin@exam.com / admin123");
   });
+}).catch((err) => {
+  console.error("Failed to start server:", err.message);
 });

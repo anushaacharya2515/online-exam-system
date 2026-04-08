@@ -7,6 +7,7 @@ import ModuleQuestionBank from "./pages/ModuleQuestionBank";
 import AddQuestion from "./pages/AddQuestion";
 import EditQuestion from "./pages/EditQuestion";
 import AdminCreateExam from "./pages/AdminCreateExam";
+import ManageModules from "./pages/ManageModules";
 import AdminResults from "./pages/AdminResults";
 import AdminStudents from "./pages/AdminStudents";
 import AdminSettings from "./pages/AdminSettings";
@@ -74,6 +75,14 @@ export default function App() {
         element={
           <ProtectedRoute role="admin">
             <AdminCreateExam />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/modules"
+        element={
+          <ProtectedRoute role="admin">
+            <ManageModules />
           </ProtectedRoute>
         }
       />

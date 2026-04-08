@@ -71,7 +71,20 @@ function toQuestionFromCsv(row) {
 }
 
 export function listQuestions(req, res) {
-  Question.find().lean().then((questions) => res.json(questions));
+  const { module, topic, difficulty, type, ids, moduleId, topicId, subTopicId } = req.query;
+  if (ids) {
+    const list = ids.split(",").map((v) => v.trim()).filter(Boolean);
+    return Question.find({ id: { $in: list } }).lean().then((questions) => res.json(questions));
+  }
+  Question.find({
+    ...(moduleId ? { moduleId } : {}),
+    ...(topicId ? { topicId } : {}),
+    ...(subTopicId ? { subTopicId } : {}),
+    ...(module ? { subject: module } : {}),
+    ...(topic ? { topic } : {}),
+    ...(difficulty ? { difficulty } : {}),
+    ...(type ? { type } : {})
+  }).lean().then((questions) => res.json(questions));
 }
 
 export function searchQuestions(req, res) {

@@ -3,6 +3,7 @@ import { gradeAttempt } from "../services/grading.js";
 import { Exam } from "../models/Exam.js";
 import { Question } from "../models/Question.js";
 import { Result } from "../models/Result.js";
+import { Module } from "../models/Module.js";
 
 function normalizeExamBody(body) {
   return {
@@ -48,6 +49,148 @@ function selectByRules(data, rules) {
   }
 
   return { questionIds: picked };
+}
+
+function shuffle(array) {
+  return [...array].sort(() => Math.random() - 0.5);
+}
+
+async function pickQuestionsByCounts({ subject, topic, counts, moduleId, topicId, subTopicId }) {
+  const difficulties = Object.entries(counts || {}).filter(([, count]) => Number(count) > 0);
+  if (difficulties.length === 0) {
+    return { error: "selection rules must include at least one difficulty count" };
+  }
+
+  const picked = [];
+  for (const [level, countRaw] of difficulties) {
+    const count = Number(countRaw);
+    const pool = await Question.find({
+      ...(moduleId ? { moduleId } : {}),
+      ...(topicId ? { topicId } : {}),
+      ...(subTopicId ? { subTopicId } : {}),
+      ...(subject ? { subject } : {}),
+      ...(topic ? { topic } : {}),
+      difficulty: level
+    }).lean();
+
+    if (pool.length < count) {
+      return { error: `Not enough ${level} questions for the selected rules` };
+    }
+
+    picked.push(...shuffle(pool).slice(0, count));
+  }
+
+  const unique = new Map(picked.map((q) => [q.id, q]));
+  return { questions: shuffle([...unique.values()]) };
+}
+
+export async function autoGenerateExam(req, res) {
+  if (req.user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+
+  const {
+    name,
+    duration,
+    module,
+    topic,
+    moduleId,
+    topicId,
+    subTopicId,
+    easyCount = 0,
+    mediumCount = 0,
+    hardCount = 0,
+    preview = false,
+    startDate = null,
+    endDate = null
+  } = req.body;
+
+  if (!name || !duration) {
+    return res.status(400).json({ message: "name and duration are required" });
+  }
+
+  const counts = { Easy: Number(easyCount), Medium: Number(mediumCount), Hard: Number(hardCount) };
+  const pick = await pickQuestionsByCounts({
+    subject: module,
+    topic,
+    counts,
+    moduleId,
+    topicId,
+    subTopicId
+  });
+  if (pick.error) return res.status(400).json({ message: pick.error });
+
+  const questionIds = pick.questions.map((q) => q.id);
+  const totalMarks = pick.questions.reduce((sum, q) => sum + (q.marks || 0), 0);
+
+  if (preview) {
+    return res.json({
+      questions: pick.questions,
+      questionIds,
+      totalMarks,
+      totalQuestions: questionIds.length
+    });
+  }
+
+  const exam = {
+    id: uuidv4(),
+    title: name,
+    examName: name,
+    subject: module || (moduleId ? (await Module.findById(moduleId).lean())?.name : "General") || "General",
+    durationMinutes: Number(duration),
+    totalMarks,
+    totalQuestions: questionIds.length,
+    startDate,
+    endDate,
+    questionIds,
+    published: true,
+    selectionRules: { subject: module, topic, moduleId, topicId, subTopicId, counts },
+    createdAt: new Date().toISOString()
+  };
+
+  Exam.create(exam).then((created) => res.status(201).json(created));
+}
+
+export async function manualCreateExam(req, res) {
+  if (req.user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+
+  const {
+    name,
+    duration,
+    selectedQuestions = [],
+    startDate = null,
+    endDate = null
+  } = req.body;
+
+  if (!name || !duration) {
+    return res.status(400).json({ message: "name and duration are required" });
+  }
+
+  if (!Array.isArray(selectedQuestions) || selectedQuestions.length === 0) {
+    return res.status(400).json({ message: "selectedQuestions must include at least one question" });
+  }
+
+  const questions = await Question.find({ id: { $in: selectedQuestions } }).lean();
+  if (questions.length !== selectedQuestions.length) {
+    return res.status(400).json({ message: "One or more selected questions are invalid" });
+  }
+
+  const totalMarks = questions.reduce((sum, q) => sum + (q.marks || 0), 0);
+
+  const exam = {
+    id: uuidv4(),
+    title: name,
+    examName: name,
+    subject: questions[0]?.subject || "General",
+    durationMinutes: Number(duration),
+    totalMarks,
+    totalQuestions: selectedQuestions.length,
+    startDate,
+    endDate,
+    questionIds: selectedQuestions,
+    published: true,
+    createdAt: new Date().toISOString()
+  };
+
+  Exam.create(exam).then((created) => res.status(201).json(created));
 }
 
 export function createExam(req, res) {

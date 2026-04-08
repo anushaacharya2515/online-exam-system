@@ -22,6 +22,9 @@ export default function AdminShell({ title, children }) {
             <NavLink to="/admin/question-bank">
               <span className="nav-ico">Q</span>Question Bank
             </NavLink>
+            <NavLink to="/admin/modules">
+              <span className="nav-ico">M</span>Modules & Topics
+            </NavLink>
             <NavLink to="/admin/exams">
               <span className="nav-ico">E</span>Create Exam
             </NavLink>

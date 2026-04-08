@@ -8,6 +8,9 @@ export function buildQuestion(body) {
     subject: body.subject ?? body.subject_name,
     topic: body.topic ?? body.topic_name,
     difficulty: body.difficulty ?? body.level,
+    moduleId: body.moduleId ?? body.module_id ?? null,
+    topicId: body.topicId ?? body.topic_id ?? null,
+    subTopicId: body.subTopicId ?? body.subtopic_id ?? body.subTopic_id ?? null,
     imageUrl: body.imageUrl ?? body.image_url ?? "",
     audioUrl: body.audioUrl ?? body.audio_url ?? "",
     explanation: body.explanation ?? ""
@@ -28,6 +31,9 @@ export function buildQuestion(body) {
     imageUrl = "",
     audioUrl = "",
     explanation = "",
+    moduleId = null,
+    topicId = null,
+    subTopicId = null,
     subject = "",
     difficulty = "",
     topic = "",
@@ -38,8 +44,12 @@ export function buildQuestion(body) {
     return { error: "type, text, correctAnswer are required" };
   }
 
-  if (!subject || !difficulty || !topic) {
-    return { error: "subject, difficulty, topic are required" };
+  if ((!moduleId || !topicId) && (!subject || !difficulty || !topic)) {
+    return { error: "moduleId & topicId or subject, topic, difficulty are required" };
+  }
+
+  if (!difficulty) {
+    return { error: "difficulty is required" };
   }
 
   const optionTypes = ["MCQ", "SINGLE_MCQ", "MSQ", "PARAGRAPH_CASE", "ASSERTION_REASON", "TRUE_FALSE", "LOGICAL_REASONING"];
@@ -74,6 +84,9 @@ export function buildQuestion(body) {
     imageUrl,
     audioUrl,
     explanation,
+    moduleId,
+    topicId,
+    subTopicId,
     subject,
     difficulty,
     topic,

@@ -1,4 +1,4 @@
-export default function QuestionTable({ questions, onEdit, onDelete, onPreview }) {
+export default function QuestionTable({ questions, onEdit, onDelete, onPreview, onDuplicate }) {
   return (
     <div className="table-wrap">
       <table className="data-table">
@@ -31,6 +31,9 @@ export default function QuestionTable({ questions, onEdit, onDelete, onPreview }
               <td>{q.marks}</td>
               <td className="row-actions">
                 <button className="ghost" onClick={() => onPreview(q)}>Preview</button>
+                {onDuplicate && (
+                  <button className="ghost" onClick={() => onDuplicate(q)}>Duplicate</button>
+                )}
                 <button className="ghost" onClick={() => onEdit(q)}>Edit</button>
                 <button onClick={() => onDelete(q.id)}>Delete</button>
               </td>

@@ -8,6 +8,7 @@ import {
   TYPE_OPTIONS,
   TYPE_HELP,
   MODULES,
+  DIFFICULTY_OPTIONS,
   parsePairs,
   pairsToText,
   buildDragDropPairs
@@ -123,6 +124,29 @@ export default function ModuleQuestionBank() {
       marks: question.marks || 1
     });
     setModalMode("edit");
+  }
+
+  function duplicateQuestion(question) {
+    setActiveQuestion(null);
+    setForm({
+      text: question.text || question.question_text || "",
+      module: decodedModule,
+      topic: question.topic || moduleTopics[0] || "",
+      difficulty: question.difficulty || "Easy",
+      type: question.type || "MCQ",
+      options: Array.isArray(question.options) && question.options.length ? question.options : ["", "", "", ""],
+      correctAnswer: typeof question.correctAnswer === "string" || typeof question.correctAnswer === "number" ? String(question.correctAnswer) : "",
+      msqCorrect: Array.isArray(question.correctAnswer) ? question.correctAnswer : [],
+      pairText: pairsToText(question.pairs),
+      dragOrderText: Array.isArray(question.pairs)
+        ? question.pairs.map((p) => p.right).join("\n")
+        : "",
+      imageUrl: question.imageUrl || "",
+      audioUrl: question.audioUrl || "",
+      explanation: question.explanation || "",
+      marks: question.marks || 1
+    });
+    setModalMode("add");
   }
 
   function openPreviewModal(question) {
@@ -339,14 +363,16 @@ export default function ModuleQuestionBank() {
         <div className="filter-controls">
           <select value={filters.difficulty} onChange={(e) => setFilters({ ...filters, difficulty: e.target.value })}>
             <option value="">All Difficulty</option>
-            <option value="Easy">Easy</option>
-            <option value="Hard">Hard</option>
+            {DIFFICULTY_OPTIONS.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
           </select>
           <select value={filters.type} onChange={(e) => setFilters({ ...filters, type: e.target.value })}>
             <option value="">All Types</option>
             {TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
           <button className="ghost" onClick={() => setFilters({ topic: "", difficulty: "", type: "" })}>Reset</button>
+          <span className="pill-count">{filteredQuestions.length} questions</span>
         </div>
       </div>
 
@@ -355,6 +381,7 @@ export default function ModuleQuestionBank() {
         onEdit={openEditModal}
         onDelete={removeQuestion}
         onPreview={openPreviewModal}
+        onDuplicate={duplicateQuestion}
       />
 
       {modalMode && (
@@ -433,17 +460,11 @@ export default function ModuleQuestionBank() {
                       <span className="muted">Module</span>
                       <strong>{decodedModule}</strong>
                     </div>
-                    <div className="topic-chip-row">
-                      {(MODULES[decodedModule] || []).map((t) => (
-                        <button
-                          key={t}
-                          type="button"
-                          className={`topic-chip ${form.topic === t ? "active" : ""}`}
-                          onClick={() => setForm({ ...form, topic: t })}
-                        >
-                          {t}
-                        </button>
-                      ))}
+                    <div>
+                      <label>Topic</label>
+                      <select value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })}>
+                        {(MODULES[decodedModule] || []).map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
                     </div>
                   </div>
 
@@ -451,8 +472,7 @@ export default function ModuleQuestionBank() {
                     <div>
                       <label>Difficulty</label>
                       <select value={form.difficulty} onChange={(e) => setForm({ ...form, difficulty: e.target.value })}>
-                        <option value="Easy">Easy</option>
-                        <option value="Hard">Hard</option>
+                        {DIFFICULTY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
                       </select>
                     </div>
                     <div>
@@ -477,6 +497,66 @@ export default function ModuleQuestionBank() {
                     ))}
                   </div>
                   <p className="hint">{TYPE_HELP[form.type]}</p>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => setForm((prev) => ({
+                        ...prev,
+                        type: "MCQ",
+                        options: ["Option A", "Option B", "Option C", "Option D"],
+                        correctAnswer: "Option A"
+                      }))}
+                    >
+                      MCQ Template
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => setForm((prev) => ({
+                        ...prev,
+                        type: "MSQ",
+                        options: ["Option A", "Option B", "Option C", "Option D"],
+                        msqCorrect: ["Option A"]
+                      }))}
+                    >
+                      MSQ Template
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => setForm((prev) => ({
+                        ...prev,
+                        type: "TRUE_FALSE",
+                        options: ["True", "False"],
+                        correctAnswer: "True"
+                      }))}
+                    >
+                      True/False
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => setForm((prev) => ({
+                        ...prev,
+                        type: "MATCH",
+                        pairText: "Left 1|Right 1\nLeft 2|Right 2"
+                      }))}
+                    >
+                      Match Template
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => setForm((prev) => ({
+                        ...prev,
+                        type: "DRAG_DROP",
+                        dragOrderText: "Step 1\nStep 2\nStep 3"
+                      }))}
+                    >
+                      Drag/Drop Template
+                    </button>
+                  </div>
                 </div>
 
                 <div className="form-step">

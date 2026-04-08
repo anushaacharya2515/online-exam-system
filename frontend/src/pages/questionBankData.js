@@ -9,6 +9,8 @@ export const TYPE_OPTIONS = [
   { label: "True / False", value: "TRUE_FALSE" }
 ];
 
+export const DIFFICULTY_OPTIONS = ["Easy", "Medium", "Hard"];
+
 export const TYPE_HELP = {
   MCQ: "One correct option from A/B/C/D.",
   MSQ: "More than one correct option allowed.",
